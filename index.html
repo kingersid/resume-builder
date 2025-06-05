@@ -384,6 +384,7 @@
                     <input type="email" id="userEmail" placeholder="Enter your email">
                 </div>
                 <button class="btn btn-primary" onclick="authenticate()">Start Building</button>
+                <button class="btn btn-secondary" onclick="loginAsDemoUser()" style="margin-left:10px;">Demo Login</button>
             </div>
 
             <!-- Main Editor -->
@@ -438,6 +439,9 @@
         // // For demo purposes, we'll use localStorage
         // let supabase = null;
         // let currentUser = null;
+
+        // Demo user flag
+        let isDemoUser = false;
 
         // Available resume sections
         const availableSections = {
@@ -561,6 +565,27 @@
                 console.error('Authentication error:', error);
                 showNotification('Authentication failed', 'error');
             }
+        }
+
+        // Login as demo user
+        function loginAsDemoUser() {
+            isDemoUser = true;
+            currentUser = { email: 'demo@demo.com', demo: true };
+            document.getElementById('authSection').classList.add('hidden');
+            document.getElementById('editorContent').classList.remove('hidden');
+            showNotification('Demo mode activated!', 'success');
+            // Load demo resume data if available, else start fresh
+            const demoResume = localStorage.getItem('demoResumeData');
+            const demoSections = localStorage.getItem('demoAddedSections');
+            if (demoResume && demoSections) {
+                resumeData = JSON.parse(demoResume);
+                addedSections = JSON.parse(demoSections);
+            } else {
+                resumeData = {};
+                addedSections = ['personalInfo'];
+            }
+            initializeApp();
+            updatePreview();
         }
 
         // Render available sections
@@ -838,6 +863,13 @@
                 return;
             }
 
+            if (isDemoUser) {
+                localStorage.setItem('demoResumeData', JSON.stringify(resumeData));
+                localStorage.setItem('demoAddedSections', JSON.stringify(addedSections));
+                showNotification('Demo resume saved locally', 'success');
+                return;
+            }
+
             if (!supabase) {
                 showNotification('Database connection not initialized', 'error');
                 return;
@@ -868,10 +900,26 @@
             }
         }
 
-        // Load resume from Supabase
+        // Load resume from Supabase or localStorage (demo)
         async function loadResume() {
             if (!currentUser) {
                 showNotification('Please authenticate first', 'error');
+                return;
+            }
+
+            if (isDemoUser) {
+                const demoResume = localStorage.getItem('demoResumeData');
+                const demoSections = localStorage.getItem('demoAddedSections');
+                if (demoResume && demoSections) {
+                    resumeData = JSON.parse(demoResume);
+                    addedSections = JSON.parse(demoSections);
+                    renderAvailableSections();
+                    renderResumeSections();
+                    updatePreview();
+                    showNotification('Demo resume loaded from local storage', 'success');
+                } else {
+                    showNotification('No demo resume found', 'error');
+                }
                 return;
             }
 
@@ -997,6 +1045,16 @@
 
         // Sign out
         async function signOut() {
+            if (isDemoUser) {
+                resumeData = {};
+                addedSections = ['personalInfo'];
+                currentUser = null;
+                isDemoUser = false;
+                document.getElementById('authSection').classList.remove('hidden');
+                document.getElementById('editorContent').classList.add('hidden');
+                showNotification('Exited demo mode', 'success');
+                return;
+            }
             try {
                 const { error } = await supabase.auth.signOut();
                 if (error) throw error;
